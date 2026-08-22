@@ -3,58 +3,58 @@ from django.core.cache import cache
 from django.contrib.auth.models import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Appointment
 
-# Set to True during development to force OTP to '123456'
 USE_DEFAULT_STATIC_OTP = True
 
+# --- Serializers ---
+
+class AppointmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = [
+            "id", "user", "patient_name", "age", "gender", "phone",
+            "department", "doctor", "appointment_date", "time_slot",
+            "concern", "notes", "status", "created_at",
+        ]
+        read_only_fields = ["id", "user", "status", "created_at"]
+
+# --- Patient Views ---
+
 class SendOTPView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        raw_phone = request.data.get("phone")
-        if not raw_phone:
-            return Response({"error": "Phone number is required"}, status=status.HTTP_400_BAD_REQUEST)
+        raw_phone = request.data.get("phone", "")
+        clean_phone = str(raw_phone)[-10:]
+        
+        if len(clean_phone) < 10:
+            return Response({"error": "Valid 10-digit phone number required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Standardize number to last 10 digits
-        clean_phone = raw_phone[-10:]
-
-        # Determine OTP (Default or Random)
-        if USE_DEFAULT_STATIC_OTP:
-            otp = "123456"
-        else:
-            otp = str(random.randint(100000, 999999))
-
-        # Store OTP in cache for 5 minutes (300 seconds)
+        otp = "123456" if USE_DEFAULT_STATIC_OTP else str(random.randint(100000, 999999))
         cache.set(f"otp_{clean_phone}", otp, timeout=300)
 
-        # Print OTP to Django terminal for easy testing
-        print("\n" + "=" * 40)
-        print(f"   DEV OTP FOR {clean_phone}: {otp}")
-        print("=" * 40 + "\n")
+        print(f"\n========================================\n DEV OTP FOR {clean_phone}: {otp}\n========================================\n")
 
-        return Response({
-            "message": f"OTP generated successfully. (Testing OTP: {otp})"
-        }, status=status.HTTP_200_OK)
+        return Response({"message": "OTP generated and sent successfully."}, status=status.HTTP_200_OK)
 
 
 class VerifyOTPView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        raw_phone = request.data.get("phone")
+        raw_phone = request.data.get("phone", "")
         user_otp = request.data.get("otp")
 
-        if not raw_phone or not user_otp:
-            return Response({"error": "Phone number and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        clean_phone = raw_phone[-10:]
+        clean_phone = str(raw_phone)[-10:]
         stored_otp = cache.get(f"otp_{clean_phone}")
 
-        # Verify against stored OTP
         if stored_otp and stored_otp == user_otp:
-            # Clear used OTP
             cache.delete(f"otp_{clean_phone}")
-
-            # Retrieve or create user with 10-digit phone number as username
             user, created = User.objects.get_or_create(username=clean_phone)
             refresh = RefreshToken.for_user(user)
 
@@ -69,24 +69,75 @@ class VerifyOTPView(APIView):
 
 
 class AppointmentCreateView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        try:
-            data = request.data
-            appointment = Appointment.objects.create(
-                patient_name=data.get("patient_name"),
-                age=data.get("age"),
-                gender=data.get("gender"),
-                phone=data.get("phone"),
-                department=data.get("department", "Orthopedics"),
-                doctor=data.get("doctor"),
-                appointment_date=data.get("appointment_date"),
-                time_slot=data.get("time_slot"),
-                concern=data.get("concern"),
-                notes=data.get("notes", ""),
-            )
+        serializer = AppointmentSerializer(data=request.data)
+        if serializer.is_valid():
+            appointment = serializer.save(user=request.user)
             return Response(
-                {"message": "Appointment booked successfully!", "id": appointment.id},
-                status=status.HTTP_201_CREATED,
+                {
+                    "message": "Thank you! Your booking was successful.",
+                    "appointment": AppointmentSerializer(appointment).data,
+                },
+                status=status.HTTP_201_CREATED
             )
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserAppointmentListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        appointments = Appointment.objects.filter(user=request.user).order_by('-id')
+        return Response(AppointmentSerializer(appointments, many=True).data, status=status.HTTP_200_OK)
+
+
+# --- Hospital Views ---
+
+class HospitalAppointmentListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        appointments = Appointment.objects.all().order_by('-id')
+        serializer = AppointmentSerializer(appointments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class HospitalUpdateStatusView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        appointment_id = request.data.get("id")
+        new_status = request.data.get("status")
+
+        if not appointment_id or not new_status:
+            return Response({"error": "Both 'id' and 'status' are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            appointment = Appointment.objects.get(id=appointment_id)
+            
+            appointment.status = new_status
+
+            if "appointment_date" in request.data and hasattr(appointment, 'appointment_date'):
+                appointment.appointment_date = request.data.get("appointment_date")
+            
+            if "time_slot" in request.data and hasattr(appointment, 'time_slot'):
+                appointment.time_slot = request.data.get("time_slot")
+                
+            if "doctor" in request.data and hasattr(appointment, 'doctor'):
+                appointment.doctor = request.data.get("doctor")
+
+            appointment.save()
+
+            return Response({
+                "message": f"Appointment #{appointment.id} updated successfully",
+                "id": appointment.id,
+                "status": new_status
+            }, status=status.HTTP_200_OK)
+
+        except Appointment.DoesNotExist:
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
