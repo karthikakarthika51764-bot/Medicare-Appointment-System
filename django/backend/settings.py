@@ -84,8 +84,8 @@ REST_FRAMEWORK = {
 }
 
 
-# Fast2SMS API Key Configuration
-FAST2SMS_API_KEY = os.getenv('FAST2SMS_API_KEY', 'YOUR_FAST2SMS_API_KEY_HERE')
+DEFAULT_OTP = os.getenv('DEFAULT_OTP', '123456')
+USE_DEFAULT_STATIC_OTP = os.getenv('USE_DEFAULT_STATIC_OTP', 'True').lower() == 'true'
 
 # In-memory cache for temporary OTP storage
 CACHES = {

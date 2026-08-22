@@ -7,9 +7,8 @@ from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
 from .models import Appointment
-
-USE_DEFAULT_STATIC_OTP = True
 
 # --- Serializers ---
 
@@ -35,13 +34,13 @@ class SendOTPView(APIView):
         if len(clean_phone) < 10:
             return Response({"error": "Valid 10-digit phone number required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        otp = "123456" if USE_DEFAULT_STATIC_OTP else str(random.randint(100000, 999999))
+        otp = settings.DEFAULT_OTP if settings.USE_DEFAULT_STATIC_OTP else str(random.randint(100000, 999999))
         cache.set(f"otp_{clean_phone}", otp, timeout=300)
 
         print(f"\n========================================\n DEV OTP FOR {clean_phone}: {otp}\n========================================\n")
 
         response_data = {"message": "OTP generated and sent successfully."}
-        if USE_DEFAULT_STATIC_OTP:
+        if settings.USE_DEFAULT_STATIC_OTP:
             response_data["development_otp"] = otp
 
         return Response(response_data, status=status.HTTP_200_OK)
