@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: medicare-backend
+    runtime: python
+    rootDir: django
+    buildCommand: pip install -r requirements.txt && python manage.py migrate
+    startCommand: gunicorn backend.wsgi:application
+    healthCheckPath: /health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com,localhost,127.0.0.1"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://medicare-appointment-sys-42f77.web.app,https://medicare-appointment-sys-42f77.firebaseapp.com"
