@@ -40,7 +40,11 @@ class SendOTPView(APIView):
 
         print(f"\n========================================\n DEV OTP FOR {clean_phone}: {otp}\n========================================\n")
 
-        return Response({"message": "OTP generated and sent successfully."}, status=status.HTTP_200_OK)
+        response_data = {"message": "OTP generated and sent successfully."}
+        if USE_DEFAULT_STATIC_OTP:
+            response_data["development_otp"] = otp
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class VerifyOTPView(APIView):

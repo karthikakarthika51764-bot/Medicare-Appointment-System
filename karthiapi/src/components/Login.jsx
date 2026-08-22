@@ -2,16 +2,19 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactPhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import { API_BASE_URL } from "../config";
 
 const PhoneInput = ReactPhoneInput.default || ReactPhoneInput;
 
 export default function Login() {
-  const navigate = useNavigate(); // Initialize Router Navigation
+  const navigate = useNavigate();
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // 1 = Phone Input, 2 = OTP Input
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [developmentOtp, setDevelopmentOtp] = useState("");
 
   // Step 1: Request OTP from Django Backend
   const handleSendOTP = async () => {
@@ -20,8 +23,11 @@ export default function Login() {
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/send-otp/", {
+      const res = await fetch(`${API_BASE_URL}/api/send-otp/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
@@ -29,25 +35,30 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
+        setDevelopmentOtp(data.development_otp || "");
         setStep(2);
-        setError("");
       } else {
         setError(data.error || "Failed to send OTP");
       }
     } catch (err) {
-      setError("Server connection error");
+      setError("Server connection error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Step 2: Verify OTP & Navigate to Home
+  // Step 2: Verify OTP & Save JWT Tokens
   const handleVerifyOTP = async () => {
     if (!otp || otp.length < 4) {
       setError("Please enter a valid OTP");
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/verify-otp/", {
+      const res = await fetch(`${API_BASE_URL}/api/verify-otp/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, otp }),
@@ -55,23 +66,30 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        // 1. Save authentication token to browser storage
-        localStorage.setItem("token", data.access);
+        // Store access and refresh tokens uniformly across components
+        if (data.access) {
+          localStorage.setItem("access", data.access);
+          localStorage.setItem("token", data.access); // Fallback key
+        }
+        if (data.refresh) {
+          localStorage.setItem("refresh", data.refresh);
+        }
 
-        // 2. Redirect user to Home page immediately
         navigate("/Home");
       } else {
         setError(data.error || "Invalid or expired OTP");
       }
     } catch (err) {
-      setError("Server connection error");
+      setError("Server connection error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="d-flex justify-content-center align-items-center vh-100 bg-light">
       <div className="card p-4 shadow-sm" style={{ width: "360px", borderRadius: "12px" }}>
-        <h4 className="text-center mb-3">Sign In</h4>
+        <h4 className="text-center mb-3 fw-bold">Sign In</h4>
 
         {step === 1 ? (
           <>
@@ -85,30 +103,44 @@ export default function Login() {
               }}
               inputStyle={{ width: "100%", height: "40px" }}
             />
-            <button className="btn btn-success w-100 mt-3" onClick={handleSendOTP}>
-              Send OTP
+            <button 
+              className="btn btn-success w-100 mt-3 fw-semibold" 
+              onClick={handleSendOTP} 
+              disabled={loading}
+            >
+              {loading ? "Sending..." : "Send OTP"}
             </button>
           </>
         ) : (
           <>
             <label className="form-label text-muted small">Enter Verification Code</label>
+            {developmentOtp && (
+              <div className="alert alert-warning py-2 text-center small">
+                Development OTP: <strong>{developmentOtp}</strong>
+              </div>
+            )}
             <input
               type="text"
-              className="form-control text-center mb-3"
+              className="form-control text-center mb-3 fs-5 tracking-widest"
               placeholder="123456"
               maxLength={6}
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
             />
-            <button className="btn btn-success w-100" onClick={handleVerifyOTP}>
-              Verify 
+            <button 
+              className="btn btn-success w-100 fw-semibold" 
+              onClick={handleVerifyOTP} 
+              disabled={loading}
+            >
+              {loading ? "Verifying..." : "Verify OTP"}
             </button>
             <button
-              className="btn btn-link w-100 mt-2 text-decoration-none small"
+              className="btn btn-link w-100 mt-2 text-decoration-none small text-secondary"
               onClick={() => {
                 setStep(1);
                 setError("");
               }}
+              disabled={loading}
             >
               Change Phone Number
             </button>
