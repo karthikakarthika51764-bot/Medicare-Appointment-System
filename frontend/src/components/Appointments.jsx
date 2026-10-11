@@ -1,22 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../config";
 
 export default function Appointments() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    patient_name: "",
-    age: "",
-    gender: "Male",
-    phone: "",
-    doctor: "Dr. Rajesh Sharma (Knee & Joint Specialist)",
-    appointment_date: "",
-    time_slot: "10:00 AM - 11:00 AM",
-    concern: "Knee Pain",
-    notes: "",
-  });
-
-  const [status, setStatus] = useState({ type: "", message: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const orthopedicDoctors = [
     { id: 1, name: "Dr. Rajesh Sharma", spec: "Knee & Joint Replacement Specialist" },
@@ -34,6 +21,72 @@ export default function Appointments() {
     "Post-Surgery Follow-up",
   ];
 
+  const initialFormState = {
+    patient_name: "",
+    age: "",
+    gender: "Male",
+    phone: "",
+    doctor: `${orthopedicDoctors[0].name} (${orthopedicDoctors[0].spec})`,
+    appointment_date: "",
+    time_slot: "10:00 AM - 11:00 AM",
+    concern: commonConcerns[0],
+    notes: "",
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+  const [status, setStatus] = useState({ type: "", message: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [appointments, setAppointments] = useState([]);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(true);
+  const [appointmentsError, setAppointmentsError] = useState("");
+
+  useEffect(() => {
+    const savedPhone = localStorage.getItem("user_phone") || "";
+    const savedName = localStorage.getItem("user_name") || "";
+    if (savedPhone || savedName) {
+      setFormData((prev) => ({
+        ...prev,
+        phone: savedPhone || prev.phone,
+        patient_name: savedName || prev.patient_name,
+      }));
+    }
+  }, []);
+
+  const fetchAppointments = useCallback(async () => {
+    const token = localStorage.getItem("access") || localStorage.getItem("token");
+    if (!token) {
+      setAppointmentsError("Please log in to view your appointments.");
+      setIsLoadingAppointments(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/my-appointments/`, {
+        headers: { Authorization: `Bearer ${token.replace(/^"|"$/g, "").trim()}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAppointments(data);
+        setAppointmentsError("");
+      } else if (res.status === 401) {
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("token");
+        navigate("/login", { replace: true });
+      } else {
+        setAppointmentsError(data.detail || "Unable to load appointments.");
+      }
+    } catch {
+      setAppointmentsError("Unable to connect to the appointment server.");
+    } finally {
+      setIsLoadingAppointments(false);
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -43,16 +96,19 @@ export default function Appointments() {
     setIsSubmitting(true);
     setStatus({ type: "", message: "" });
 
-    // Open blank tab synchronously on click event to bypass browser pop-up blockers
-    const whatsappWindow = window.open("", "_blank");
-
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/api/appointments/", {
+      const token = localStorage.getItem("access") || localStorage.getItem("token");
+      if (!token) {
+        setStatus({ type: "danger", message: "Please log in before confirming your booking." });
+        navigate("/login");
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/book-appointment/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
+          Authorization: `Bearer ${token.replace(/^"|"$/g, "").trim()}`,
         },
         body: JSON.stringify({ ...formData, department: "Orthopedics" }),
       });
@@ -60,62 +116,27 @@ export default function Appointments() {
       const data = await res.json();
 
       if (res.ok) {
-        // Prepare WhatsApp payload before clearing form state
-        const patientPhone = `91${formData.phone.slice(-10)}`;
-        const communityLink = "https://chat.whatsapp.com/ILxI4c9OSf34BKy7YX1GYC";
-
-        const message = `👋 Hello *${formData.patient_name}*,
-
-Thank you for choosing *MediCare Healthcare*! Your orthopedic appointment has been successfully scheduled.
-
-📋 *Appointment Details:*
-• *Doctor:* ${formData.doctor}
-• *Date:* ${formData.appointment_date}
-• *Time:* ${formData.time_slot}
-• *Concern:* ${formData.concern}
-
-📌 *Instructions:* Please arrive 15 minutes early and bring any relevant X-rays or medical records.
-
-💬 *Join Our Orthopedic Support Community:*
-Get joint care tips, doctor updates, and direct support:
-🔗 ${communityLink}
-
-*Wishing you great health,*
-*MediCare Healthcare Team*`;
-
-        const encodedUrl = `https://wa.me/${patientPhone}?text=${encodeURIComponent(message)}`;
-
-        // Redirect the pre-opened browser tab to WhatsApp
-        if (whatsappWindow) {
-          whatsappWindow.location.href = encodedUrl;
-        }
+        const appointment = data.appointment || data;
+        const bookingId = appointment.id ? ` Booking ID: #${appointment.id}.` : "";
 
         setStatus({
           type: "success",
-          message: "Orthopedic appointment booked! Opening WhatsApp confirmation...",
+          message: `🎉 Thank you! Your booking was successful.${bookingId}`,
         });
 
-        // Reset form inputs
-        setFormData({
-          patient_name: "",
-          age: "",
-          gender: "Male",
-          phone: "",
-          doctor: orthopedicDoctors[0].name,
-          appointment_date: "",
-          time_slot: "10:00 AM - 11:00 AM",
-          concern: "Knee Pain",
-          notes: "",
-        });
+        setFormData(initialFormState);
+        await fetchAppointments();
       } else {
-        if (whatsappWindow) whatsappWindow.close();
-        setStatus({
-          type: "danger",
-          message: data.error || "Failed to book appointment. Try again.",
-        });
+        let errorMessage = "Failed to book appointment. Try again.";
+        if (data.detail) errorMessage = data.detail;
+        else if (data.error) errorMessage = data.error;
+        else if (typeof data === "object") {
+          const firstKey = Object.keys(data)[0];
+          if (firstKey) errorMessage = `${firstKey}: ${Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]}`;
+        }
+        setStatus({ type: "danger", message: errorMessage });
       }
-    } catch (err) {
-      if (whatsappWindow) whatsappWindow.close();
+    } catch {
       setStatus({ type: "danger", message: "Server error connecting to backend." });
     } finally {
       setIsSubmitting(false);
@@ -125,7 +146,7 @@ Get joint care tips, doctor updates, and direct support:
   return (
     <div className="container py-5">
       <div className="row justify-content-center">
-        <div className="col-lg-8">
+        <div className="col-lg-7">
           <div className="card shadow border-0 rounded-3">
             <div className="card-header bg-success text-white p-4">
               <h3 className="mb-1 fw-bold">
@@ -137,14 +158,21 @@ Get joint care tips, doctor updates, and direct support:
             </div>
 
             <div className="card-body p-4">
-              {status.message && (
+              {status.message && status.type === "success" ? (
+                <div className="alert alert-success text-center py-4" role="status">
+                  <h1 className="h3 fw-bold mb-2">Thank you! Booking successful</h1>
+                  <p className="mb-0">{status.message}</p>
+                  <small className="d-block mt-2 text-muted">
+                    Your booking is now available in the hospital dashboard for approval.
+                  </small>
+                </div>
+              ) : status.message ? (
                 <div className={`alert alert-${status.type} text-center`} role="alert">
                   {status.message}
                 </div>
-              )}
+              ) : null}
 
               <form onSubmit={handleSubmit}>
-                {/* Patient Information */}
                 <h6 className="fw-bold text-success mb-3">1. Patient Details</h6>
                 <div className="row g-3 mb-4">
                   <div className="col-md-6">
@@ -153,7 +181,6 @@ Get joint care tips, doctor updates, and direct support:
                       type="text"
                       name="patient_name"
                       className="form-control"
-                      placeholder="e.g., John Doe"
                       value={formData.patient_name}
                       onChange={handleChange}
                       required
@@ -166,7 +193,6 @@ Get joint care tips, doctor updates, and direct support:
                       type="number"
                       name="age"
                       className="form-control"
-                      placeholder="Age"
                       value={formData.age}
                       onChange={handleChange}
                       required
@@ -193,7 +219,6 @@ Get joint care tips, doctor updates, and direct support:
                       type="tel"
                       name="phone"
                       className="form-control"
-                      placeholder="10-digit mobile number"
                       value={formData.phone}
                       onChange={handleChange}
                       required
@@ -201,7 +226,6 @@ Get joint care tips, doctor updates, and direct support:
                   </div>
                 </div>
 
-                {/* Doctor & Schedule Selection */}
                 <h6 className="fw-bold text-success mb-3">2. Doctor & Date Selection</h6>
                 <div className="row g-3 mb-4">
                   <div className="col-md-12">
@@ -250,7 +274,6 @@ Get joint care tips, doctor updates, and direct support:
                   </div>
                 </div>
 
-                {/* Orthopedic Symptoms & Notes */}
                 <h6 className="fw-bold text-success mb-3">3. Primary Orthopedic Concern</h6>
                 <div className="row g-3 mb-4">
                   <div className="col-md-6">
@@ -275,14 +298,12 @@ Get joint care tips, doctor updates, and direct support:
                       type="text"
                       name="notes"
                       className="form-control"
-                      placeholder="e.g., Pain duration, previous x-ray details"
                       value={formData.notes}
                       onChange={handleChange}
                     />
                   </div>
                 </div>
 
-                {/* Submit Buttons */}
                 <div className="d-flex gap-2">
                   <button
                     type="submit"
@@ -300,6 +321,60 @@ Get joint care tips, doctor updates, and direct support:
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+        <div className="col-lg-5 mt-4 mt-lg-0">
+          <div className="card shadow border-0 h-100">
+            <div className="card-header bg-dark text-white p-4">
+              <h3 className="mb-1 fw-bold">My Appointments</h3>
+              <p className="mb-0 small opacity-75">Your latest booking records</p>
+            </div>
+            <div className="card-body p-0">
+              {isLoadingAppointments ? (
+                <div className="p-4 text-center text-muted">Loading appointments...</div>
+              ) : appointmentsError ? (
+                <div className="alert alert-danger m-3">{appointmentsError}</div>
+              ) : appointments.length === 0 ? (
+                <div className="p-4 text-center text-muted">No appointments booked yet.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Doctor</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appointments.map((appointment) => (
+                        <tr key={appointment.id}>
+                          <td>
+                            <div className="fw-semibold">{appointment.doctor}</div>
+                            <small className="text-muted">#{appointment.id}</small>
+                          </td>
+                          <td>
+                            <div>{appointment.appointment_date}</div>
+                            <small className="text-muted">{appointment.time_slot}</small>
+                          </td>
+                          <td>
+                            <span className={`badge ${
+                              appointment.status === "Approved"
+                                ? "bg-success"
+                                : appointment.status === "Rejected"
+                                ? "bg-danger"
+                                : "bg-warning text-dark"
+                            }`}>
+                              {appointment.status || "Pending"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

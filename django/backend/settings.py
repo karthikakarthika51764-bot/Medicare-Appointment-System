@@ -7,12 +7,14 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 import pymysql
+from dotenv import load_dotenv
 
 # Initialize PyMySQL driver for MySQL connection
 pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-5gde=v!+b7ygl(!d@yxqn(c$07pna0-k^va6=lbnn+g(gul(%_')
 
@@ -59,7 +61,8 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         'CORS_ALLOWED_ORIGINS',
-        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,'
+        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,'
+        'http://127.0.0.1:5174,http://localhost:3000,'
         'http://127.0.0.1:3000,https://medicare-appointment-sys-42f77.web.app,'
         'https://medicare-appointment-sys-42f77.firebaseapp.com'
     ).split(',')
@@ -85,7 +88,27 @@ REST_FRAMEWORK = {
 
 
 DEFAULT_OTP = os.getenv('DEFAULT_OTP', '123456')
-USE_DEFAULT_STATIC_OTP = os.getenv('USE_DEFAULT_STATIC_OTP', 'True').lower() == 'true'
+USE_DEFAULT_STATIC_OTP = os.getenv('USE_DEFAULT_STATIC_OTP', 'False').lower() == 'true'
+
+# Email delivery for verification codes.
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend'
+    if os.getenv('EMAIL_HOST_USER', os.getenv('EMAIL_USER', ''))
+    and os.getenv('EMAIL_HOST_PASSWORD', os.getenv('EMAIL_PASS', ''))
+    else 'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', os.getenv('EMAIL_USER', ''))
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', os.getenv('EMAIL_PASS', ''))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+# MongoDB stores application authentication records. Keep MONGO_URI in the
+# environment and never commit credentials to source control.
+MONGO_URI = os.getenv('MONGO_URI', '')
+MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'medicare')
 
 # In-memory cache for temporary OTP storage
 CACHES = {

@@ -8,11 +8,15 @@ import "./index.css";
 import App from "./App.jsx";
 import Home from "./components/Home.jsx";
 import Login from "./components/Login.jsx";
+import Register from "./components/Register.jsx";
+import ForgotPassword from "./components/ForgotPassword.jsx";
 
 import Docters from "./components/Docters.jsx";
 import Services from "./components/Services.jsx";
 import Appointments from "./components/Appointments.jsx";
+
 import Profile from "./components/profile.jsx"; // Fixed casing
+import HospitalDashboard from "./components/HospitalDashboard.jsx";
 
 
 // Route Guard to protect private pages
@@ -41,6 +45,22 @@ const router = createBrowserRouter([
       {
         path: "login",
         element: <Login />,
+      },
+      {
+        path: "register",
+        element: <Register />,
+      },
+      {
+        path: "forgot-password",
+        element: <ForgotPassword />,
+      },
+      {
+        path: "HospitalDashboard",
+        element: (
+          <ProtectedRoute>
+            <HospitalDashboard />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "services",

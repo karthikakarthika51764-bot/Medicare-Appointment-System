@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./home.css";
+import { API_BASE_URL } from "../config";
 
 // Assets
 import ortho from "../assets/ortho.jpg";
@@ -102,14 +103,18 @@ export default function Home() {
     age: "",
     gender: "Male",
     phone: "",
-    doctor: `${doctors[0].name} (${doctors[0].spec})`,
+    doctor: `${doctors[0].name}`,
     appointment_date: "",
     time_slot: "10:00 AM - 11:00 AM",
     concern: "Knee Pain / Joint Issue",
   });
 
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
   const handleDoctorSelect = (doc) => {
-    setFormData({ ...formData, doctor: `${doc.name} (${doc.spec})` });
+    setFormData({ ...formData, doctor: doc.name });
     const element = document.getElementById("appointment-section");
     if (element) {
       element.scrollIntoView({ behavior: "smooth" });
@@ -120,9 +125,33 @@ export default function Home() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleBookingSubmit = (e) => {
+  const handleBookingSubmit = async (e) => {
     e.preventDefault();
-    const message = `👋 Hello MediCare Team,
+    setLoading(true);
+    setSuccessMsg("");
+    setErrorMsg("");
+
+    try {
+      // 1. Send data to Django Backend Database
+      const res = await fetch(`${API_BASE_URL}/api/book-appointment/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          department: "Orthopedics", // Default department
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const bookingId = data.appointment?.id || data.id;
+        setSuccessMsg(
+          `🎉 Thank you! Your booking was successful.${bookingId ? ` Booking ID: #${bookingId}.` : ""}`
+        );
+
+        // 2. Format WhatsApp Message and redirect
+        const message = `👋 Hello MediCare Team,
 
 Appointment Booking Request:
 • *Patient Name:* ${formData.patient_name} (${formData.age} yrs, ${formData.gender})
@@ -131,7 +160,27 @@ Appointment Booking Request:
 • *Date/Time:* ${formData.appointment_date} @ ${formData.time_slot}
 • *Concern:* ${formData.concern}`;
 
-    window.open(`https://wa.me/${HOSPITAL_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank");
+        window.open(`https://wa.me/${HOSPITAL_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank");
+
+        // Reset Form
+        setFormData({
+          patient_name: "",
+          age: "",
+          gender: "Male",
+          phone: "",
+          doctor: doctors[0].name,
+          appointment_date: "",
+          time_slot: "10:00 AM - 11:00 AM",
+          concern: "Knee Pain / Joint Issue",
+        });
+      } else {
+        setErrorMsg(data.error || "Failed to book appointment. Please try again.");
+      }
+    } catch (err) {
+      setErrorMsg("Server connection error. Please ensure backend is running.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -170,7 +219,7 @@ Appointment Booking Request:
       </section>
 
       {/* SERVICES SECTION */}
-      <section className="py-5 bg-white border-top">
+      <section id="services-section" className="py-5 bg-white border-top">
         <div className="container py-4">
           <div className="text-center mb-5">
             <h6 className="text-success fw-bold text-uppercase">Specialties</h6>
@@ -251,19 +300,38 @@ Appointment Booking Request:
                   <p className="mb-0 small opacity-75">Select any of the 5 specialists above or choose below.</p>
                 </div>
                 <div className="card-body p-4">
+                  {successMsg && <div className="alert alert-success shadow-sm">{successMsg}</div>}
+                  {errorMsg && <div className="alert alert-danger shadow-sm">{errorMsg}</div>}
+
                   <form onSubmit={handleBookingSubmit}>
                     <div className="row g-3 mb-3">
                       <div className="col-md-6">
                         <label className="form-label small fw-bold">Patient Name *</label>
-                        <input type="text" name="patient_name" className="form-control" placeholder="Full Name" required onChange={handleFormChange} />
+                        <input
+                          type="text"
+                          name="patient_name"
+                          className="form-control"
+                          placeholder="Full Name"
+                          value={formData.patient_name}
+                          required
+                          onChange={handleFormChange}
+                        />
                       </div>
                       <div className="col-md-3">
                         <label className="form-label small fw-bold">Age *</label>
-                        <input type="number" name="age" className="form-control" placeholder="Age" required onChange={handleFormChange} />
+                        <input
+                          type="number"
+                          name="age"
+                          className="form-control"
+                          placeholder="Age"
+                          value={formData.age}
+                          required
+                          onChange={handleFormChange}
+                        />
                       </div>
                       <div className="col-md-3">
                         <label className="form-label small fw-bold">Gender</label>
-                        <select name="gender" className="form-select" onChange={handleFormChange}>
+                        <select name="gender" className="form-select" value={formData.gender} onChange={handleFormChange}>
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
                           <option value="Other">Other</option>
@@ -274,13 +342,21 @@ Appointment Booking Request:
                     <div className="row g-3 mb-3">
                       <div className="col-md-6">
                         <label className="form-label small fw-bold">Phone Number *</label>
-                        <input type="tel" name="phone" className="form-control" placeholder="Mobile Number" required onChange={handleFormChange} />
+                        <input
+                          type="tel"
+                          name="phone"
+                          className="form-control"
+                          placeholder="Mobile Number"
+                          value={formData.phone}
+                          required
+                          onChange={handleFormChange}
+                        />
                       </div>
                       <div className="col-md-6">
                         <label className="form-label small fw-bold">Select Doctor (5 Available) *</label>
                         <select name="doctor" className="form-select" value={formData.doctor} onChange={handleFormChange}>
                           {doctors.map((doc) => (
-                            <option key={doc.id} value={`${doc.name} (${doc.spec})`}>
+                            <option key={doc.id} value={doc.name}>
                               {doc.name} - {doc.spec}
                             </option>
                           ))}
@@ -291,11 +367,19 @@ Appointment Booking Request:
                     <div className="row g-3 mb-4">
                       <div className="col-md-6">
                         <label className="form-label small fw-bold">Appointment Date *</label>
-                        <input type="date" name="appointment_date" className="form-control" required onChange={handleFormChange} min={new Date().toISOString().split("T")[0]} />
+                        <input
+                          type="date"
+                          name="appointment_date"
+                          className="form-control"
+                          value={formData.appointment_date}
+                          required
+                          onChange={handleFormChange}
+                          min={new Date().toISOString().split("T")[0]}
+                        />
                       </div>
                       <div className="col-md-6">
                         <label className="form-label small fw-bold">Time Slot *</label>
-                        <select name="time_slot" className="form-select" onChange={handleFormChange}>
+                        <select name="time_slot" className="form-select" value={formData.time_slot} onChange={handleFormChange}>
                           <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
                           <option value="11:30 AM - 12:30 PM">11:30 AM - 12:30 PM</option>
                           <option value="02:00 PM - 03:00 PM">02:00 PM - 03:00 PM</option>
@@ -304,8 +388,25 @@ Appointment Booking Request:
                       </div>
                     </div>
 
-                    <button type="submit" className="btn btn-success btn-lg w-100 btn-glow fw-bold rounded-pill">
-                      Confirm Appointment via WhatsApp
+                    <div className="mb-4">
+                      <label className="form-label small fw-bold">Primary Concern / Issue *</label>
+                      <input
+                        type="text"
+                        name="concern"
+                        className="form-control"
+                        placeholder="e.g. Knee pain, Back discomfort, Fracture..."
+                        value={formData.concern}
+                        required
+                        onChange={handleFormChange}
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="btn btn-success btn-lg w-100 btn-glow fw-bold rounded-pill"
+                      disabled={loading}
+                    >
+                      {loading ? "Submitting Booking..." : "Confirm Appointment & Connect via WhatsApp"}
                     </button>
                   </form>
                 </div>
@@ -315,11 +416,10 @@ Appointment Booking Request:
         </div>
       </section>
 
-      {/* ---------------- ENHANCED ANIMATED FOOTER ---------------- */}
+      {/* FOOTER */}
       <footer className="bg-dark text-light pt-5 pb-4 border-top border-secondary">
         <div className="container">
           <div className="row g-4 mb-4">
-            
             {/* Column 1: Hospital Overview */}
             <div className="col-lg-4 col-md-6">
               <h5 className="text-success fw-bold mb-3 d-flex align-items-center">
@@ -347,7 +447,6 @@ Appointment Booking Request:
                 <li className="mb-2"><a href="#services-section" className="animated-footer-link">Medical Services</a></li>
                 <li className="mb-2"><a href="#doctors-section" className="animated-footer-link">Meet 5 Doctors</a></li>
                 <li className="mb-2"><a href="#appointment-section" className="animated-footer-link">Book Appointment</a></li>
-                <li className="mb-2"><a href="#hero" className="animated-footer-link">Patient Portal</a></li>
               </ul>
             </div>
 
@@ -370,16 +469,13 @@ Appointment Booking Request:
               <h6 className="text-white fw-bold mb-3 border-bottom border-success pb-2 d-inline-block">
                 Hospital Contact
               </h6>
-              
               <p className="small text-secondary mb-2 d-flex align-items-start">
                 <i className="bi bi-geo-alt-fill text-success me-2 mt-1"></i>
                 <span>123 Health Care Avenue, Medical District, City Center</span>
               </p>
-              
               <p className="small text-secondary mb-2">
                 <i className="bi bi-telephone-fill text-success me-2"></i>+91 98765 43210
               </p>
-
               <p className="small text-secondary mb-3">
                 <i className="bi bi-clock-fill text-success me-2"></i>OPD: Mon - Sat (09:00 AM - 08:00 PM)
               </p>
@@ -392,7 +488,6 @@ Appointment Booking Request:
                 <div>Call Direct: <strong>+91 98765 00000</strong></div>
               </div>
             </div>
-
           </div>
 
           <hr className="my-4 border-secondary opacity-25" />
