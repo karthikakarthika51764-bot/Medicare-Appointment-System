@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "./home.css";
+import "./Home.css";
 import { API_BASE_URL } from "../config";
 
 // Assets

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "./home.css"; // Uses existing animations and hover styles
+import "./Home.css"; // Uses existing animations and hover styles
 
 export default function Profile() {
   const HOSPITAL_WHATSAPP = "919876543210";
