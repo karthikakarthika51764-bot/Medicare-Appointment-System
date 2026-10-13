@@ -14,7 +14,7 @@ frozenlist==1.8.0
 gunicorn==26.1.0
 idna==3.19
 multidict==6.7.1
-mysqlclient==2.2.8
+PyMySQL==1.1.2
 pymongo==4.15.1
 python-dotenv==1.1.1
 propcache==0.5.2
