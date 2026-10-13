@@ -25,7 +25,7 @@ ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "medicare-backend.onrender.com",
-    "medicare-appointment-system-36do-kpysq7n4k-ace-bda6.vercel.app",
+    ".vercel.app",
 ]
 
 
