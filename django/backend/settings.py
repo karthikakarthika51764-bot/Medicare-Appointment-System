@@ -19,15 +19,16 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-5gde=v!+b7ygl(!d@yxqn(c$07pna0-k^va6=lbnn+g(gul(%_')
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
+
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         'ALLOWED_HOSTS',
-        'localhost,127.0.0.1,medicare-backend.onrender.com,medicare-appointment-system-r6fg.vercel.app,medicare-appointment-system-ez22.vercel.app'
+        'localhost,127.0.0.1,medicare-backend.onrender.com,medicare-appointment-system-36do-kpysq7n4k-ace-bda6.vercel.app'
     ).split(',')
     if host.strip()
 ]
-    
+
 
 # Application definition
 INSTALLED_APPS = [
