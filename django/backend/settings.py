@@ -27,6 +27,7 @@ ALLOWED_HOSTS = [
     ).split(',')
     if host.strip()
 ]
+  
 
 # Application definition
 INSTALLED_APPS = [
