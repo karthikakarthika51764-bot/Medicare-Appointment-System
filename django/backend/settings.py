@@ -23,11 +23,11 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         'ALLOWED_HOSTS',
-        'localhost,127.0.0.1,medicare-backend.onrender.com,medicare-appointment-system-r6fg.vercel.app'
+        'localhost,127.0.0.1,medicare-backend.onrender.com,medicare-appointment-system-r6fg.vercel.app,medicare-appointment-system-ez22.vercel.app'
     ).split(',')
     if host.strip()
 ]
-  
+    
 
 # Application definition
 INSTALLED_APPS = [
